@@ -5,7 +5,7 @@ import { useForm } from 'react-hook-form';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { FiUploadCloud, FiFile, FiCheckCircle, FiDownload, FiArrowRight, FiArrowLeft } from 'react-icons/fi';
+import { FiUploadCloud, FiFile, FiCheckCircle, FiDownload, FiArrowRight, FiArrowLeft, FiEye, FiX, FiList } from 'react-icons/fi';
 
 export default function DashboardPage() {
   const { data: session, status } = useSession();
@@ -20,8 +20,12 @@ export default function DashboardPage() {
   });
   
   const [isProcessing, setIsProcessing] = useState(false);
-  const [result, setResult] = useState<{ jsonUrl?: string, excelUrl?: string, summary?: any } | null>(null);
+  const [result, setResult] = useState<{ jsonUrl?: string, excelUrl?: string, summary?: any, rawData?: any } | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
+  
+  // Modals state
+  const [showJsonModal, setShowJsonModal] = useState(false);
+  const [showTableModal, setShowTableModal] = useState(false);
 
   if (status === 'loading') {
     return <div className="min-h-screen flex items-center justify-center bg-slate-900"><div className="w-10 h-10 border-4 border-indigo-500 border-t-transparent rounded-full animate-spin"></div></div>;
@@ -61,7 +65,6 @@ export default function DashboardPage() {
     formData.append('invoicesFile', files.invoices);
 
     try {
-      // TODO: Create this API endpoint
       const response = await fetch('/api/gst/generate', {
         method: 'POST',
         body: formData,
@@ -76,7 +79,8 @@ export default function DashboardPage() {
       setResult({
         jsonUrl: resData.jsonUrl,
         excelUrl: resData.excelUrl,
-        summary: resData.summary
+        summary: resData.summary,
+        rawData: resData.rawData
       });
       setStep(3);
     } catch (err: any) {
@@ -87,7 +91,7 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white pt-20 pb-12 px-4 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-slate-900 text-white pt-20 pb-12 px-4 sm:px-6 lg:px-8 relative">
       <div className="max-w-4xl mx-auto">
         <div className="mb-8">
           <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-indigo-400 to-purple-400">
@@ -291,31 +295,31 @@ export default function DashboardPage() {
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
                     <div className="bg-slate-900/80 p-4 rounded-xl border border-white/5">
                       <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Total Sales</p>
-                      <p className="text-xl font-bold text-indigo-400">₹{result.summary.totalSales.toLocaleString('en-IN')}</p>
+                      <p className="text-xl font-bold text-indigo-400">₹{result.summary.totalSales.toLocaleString('en-IN', {maximumFractionDigits:2})}</p>
                     </div>
                     <div className="bg-slate-900/80 p-4 rounded-xl border border-white/5">
                       <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Total Returns</p>
-                      <p className="text-xl font-bold text-rose-400">₹{result.summary.totalReturns.toLocaleString('en-IN')}</p>
+                      <p className="text-xl font-bold text-rose-400">₹{result.summary.totalReturns.toLocaleString('en-IN', {maximumFractionDigits:2})}</p>
                     </div>
                     <div className="bg-slate-900/80 p-4 rounded-xl border border-white/5">
                       <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Net Taxable</p>
-                      <p className="text-xl font-bold text-emerald-400">₹{result.summary.netTaxable.toLocaleString('en-IN')}</p>
+                      <p className="text-xl font-bold text-emerald-400">₹{result.summary.netTaxable.toLocaleString('en-IN', {maximumFractionDigits:2})}</p>
                     </div>
                     <div className="bg-slate-900/80 p-4 rounded-xl border border-white/5">
                       <p className="text-slate-500 text-xs font-semibold uppercase tracking-wider mb-1">Total Tax</p>
-                      <p className="text-xl font-bold text-yellow-400">₹{result.summary.totalTax.toLocaleString('en-IN')}</p>
+                      <p className="text-xl font-bold text-yellow-400">₹{result.summary.totalTax.toLocaleString('en-IN', {maximumFractionDigits:2})}</p>
                     </div>
                   </div>
                 )}
 
-                <div className="flex flex-col sm:flex-row justify-center gap-4">
+                <div className="flex flex-col sm:flex-row justify-center gap-4 mb-6">
                   {result?.jsonUrl && (
                     <a 
                       href={result.jsonUrl} 
                       download="GSTR1_Generated.json"
                       className="px-6 py-4 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-xl transition-all flex items-center justify-center shadow-lg shadow-indigo-500/20"
                     >
-                      <FiDownload className="mr-2" /> Download JSON for Portal
+                      <FiDownload className="mr-2" /> Download JSON
                     </a>
                   )}
                   {result?.excelUrl && (
@@ -324,12 +328,27 @@ export default function DashboardPage() {
                       download="GSTR1_Generated.xlsx"
                       className="px-6 py-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl transition-all flex items-center justify-center shadow-lg shadow-emerald-500/20"
                     >
-                      <FiDownload className="mr-2" /> Download Excel Report
+                      <FiDownload className="mr-2" /> Download Excel
                     </a>
                   )}
                 </div>
+
+                <div className="flex justify-center space-x-6 border-t border-white/10 pt-6">
+                  <button 
+                    onClick={() => setShowJsonModal(true)}
+                    className="flex items-center text-slate-300 hover:text-white transition-colors text-sm bg-white/5 hover:bg-white/10 px-4 py-2 rounded-lg"
+                  >
+                    <FiEye className="mr-2" /> Preview JSON Data
+                  </button>
+                  <button 
+                    onClick={() => setShowTableModal(true)}
+                    className="flex items-center text-slate-300 hover:text-white transition-colors text-sm bg-white/5 hover:bg-white/10 px-4 py-2 rounded-lg"
+                  >
+                    <FiList className="mr-2" /> Preview Table Data
+                  </button>
+                </div>
                 
-                <button onClick={() => setStep(1)} className="mt-8 text-slate-400 hover:text-white underline text-sm transition-colors">
+                <button onClick={() => setStep(1)} className="mt-8 text-slate-500 hover:text-slate-300 underline text-sm transition-colors">
                   Generate another return
                 </button>
               </motion.div>
@@ -338,6 +357,97 @@ export default function DashboardPage() {
           </AnimatePresence>
         </div>
       </div>
+
+      {/* JSON Viewer Modal */}
+      <AnimatePresence>
+        {showJsonModal && result?.rawData && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          >
+            <motion.div 
+              initial={{ scale: 0.95 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.95 }}
+              className="bg-slate-900 border border-white/10 rounded-2xl p-6 w-full max-w-4xl max-h-[85vh] flex flex-col shadow-2xl"
+            >
+              <div className="flex justify-between items-center mb-4 border-b border-white/10 pb-4">
+                <h3 className="text-xl font-bold text-white">JSON Preview</h3>
+                <button onClick={() => setShowJsonModal(false)} className="text-slate-400 hover:text-white transition-colors bg-white/5 p-2 rounded-lg hover:bg-white/10">
+                  <FiX className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-auto bg-black/50 rounded-xl p-4 border border-white/5">
+                <pre className="text-xs text-green-400 font-mono whitespace-pre-wrap break-all">
+                  {JSON.stringify(result.rawData, null, 2)}
+                </pre>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Table Viewer Modal */}
+      <AnimatePresence>
+        {showTableModal && result?.rawData && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+          >
+            <motion.div 
+              initial={{ scale: 0.95 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.95 }}
+              className="bg-slate-900 border border-white/10 rounded-2xl p-6 w-full max-w-5xl max-h-[85vh] flex flex-col shadow-2xl"
+            >
+              <div className="flex justify-between items-center mb-4 border-b border-white/10 pb-4">
+                <h3 className="text-xl font-bold text-white">B2CS Data Preview (Excel Format)</h3>
+                <button onClick={() => setShowTableModal(false)} className="text-slate-400 hover:text-white transition-colors bg-white/5 p-2 rounded-lg hover:bg-white/10">
+                  <FiX className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-auto rounded-xl border border-white/5">
+                <table className="w-full text-sm text-left">
+                  <thead className="text-xs uppercase bg-slate-800 text-slate-400 sticky top-0">
+                    <tr>
+                      <th className="px-6 py-3">Type</th>
+                      <th className="px-6 py-3">Place of Supply (POS)</th>
+                      <th className="px-6 py-3">Rate</th>
+                      <th className="px-6 py-3">Taxable Value</th>
+                      <th className="px-6 py-3">IGST</th>
+                      <th className="px-6 py-3">CGST</th>
+                      <th className="px-6 py-3">SGST</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {result.rawData.b2cs && result.rawData.b2cs.length > 0 ? (
+                      result.rawData.b2cs.map((row: any, i: number) => (
+                        <tr key={i} className="border-b border-slate-800 hover:bg-slate-800/50">
+                          <td className="px-6 py-4">{row.typ || 'OE'}</td>
+                          <td className="px-6 py-4 font-mono">{row.pos}</td>
+                          <td className="px-6 py-4">{row.rt}%</td>
+                          <td className="px-6 py-4 text-emerald-400 font-medium">{row.txval}</td>
+                          <td className="px-6 py-4 text-slate-300">{row.iamt || 0}</td>
+                          <td className="px-6 py-4 text-slate-300">{row.camt || 0}</td>
+                          <td className="px-6 py-4 text-slate-300">{row.samt || 0}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan={7} className="px-6 py-8 text-center text-slate-500">No B2CS data found</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -50,7 +50,8 @@ export async function POST(req: Request) {
       message: 'Processed successfully',
       summary: result.summary,
       jsonUrl,
-      excelUrl
+      excelUrl,
+      rawData: result.json
     }, { status: 200 });
 
   } catch (error: any) {

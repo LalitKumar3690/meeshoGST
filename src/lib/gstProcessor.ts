@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { getPosCode } from './constants';
+import { getPosCode, POS_TO_STATE_STRING } from './constants';
 
 export interface ProcessGSTParams {
   gstin: string;
@@ -184,10 +184,121 @@ export async function processGSTR1(params: ProcessGSTParams) {
     doc_issue: { doc_det: [] }
   };
 
-  // Generate Excel Buffer (Placeholder, will use exceljs or xlsx later)
+  // === Generate Excel matching the official GST Offline Tool ===
   const outWb = XLSX.utils.book_new();
-  const b2csSheet = XLSX.utils.json_to_sheet(b2csList);
-  XLSX.utils.book_append_sheet(outWb, b2csSheet, "B2CS");
+
+  // 1. b2b,sez,de (Empty template)
+  const b2bSheet = XLSX.utils.aoa_to_sheet([
+    ["Summary For B2B, SEZ, DE (4A, 4B, 6B, 6C)",null,null,null,null,null,null,null,null,null,null,null,"HELP"],
+    ["No. of Recipients",null,"No. of Invoices",null,"Total Invoice Value",null,null,null,null,null,null,"Total Taxable Value","Total Cess"]
+  ]);
+  XLSX.utils.book_append_sheet(outWb, b2bSheet, "b2b,sez,de");
+
+  // 2. b2cl (Empty template)
+  const b2clSheet = XLSX.utils.aoa_to_sheet([
+    ["Summary For B2CL(5)",null,null,null,null,null,null,null,"HELP"],
+    ["No. of Invoices"]
+  ]);
+  XLSX.utils.book_append_sheet(outWb, b2clSheet, "b2cl");
+
+  // 3. b2cs (Populated)
+  const totalB2csTaxable = b2csList.reduce((acc, row) => acc + row.txval, 0);
+  const b2csAoA = [
+    ["Summary For B2CS(7)",null,null,null,null,null,"HELP"],
+    [null,null,null,null,"Total Taxable  Value","Total Cess"],
+    [null,null,null,null, totalB2csTaxable, 0],
+    ["Type","Place Of Supply","Applicable % of Tax Rate","Rate","Taxable Value","Cess Amount","E-Commerce GSTIN"]
+  ];
+  b2csList.forEach(row => {
+    b2csAoA.push([
+      row.typ,
+      POS_TO_STATE_STRING[row.pos] || row.pos,
+      null, // Applicable % of Tax Rate
+      row.rt,
+      row.txval,
+      row.csamt,
+      "" // E-Commerce GSTIN
+    ]);
+  });
+  const b2csSheet = XLSX.utils.aoa_to_sheet(b2csAoA);
+  XLSX.utils.book_append_sheet(outWb, b2csSheet, "b2cs");
+
+  // 4. cdnr (Empty template)
+  const cdnrSheet = XLSX.utils.aoa_to_sheet([
+    ["Summary For CDNR(9B)",null,null,null,null,null,null,null,null,null,null,null,"HELP"],
+    ["No. of Recipients",null,"No. of Notes",null,null,null,null,null,"Total Note Value",null,null,"Total Taxable Value","Total Cess"]
+  ]);
+  XLSX.utils.book_append_sheet(outWb, cdnrSheet, "cdnr");
+
+  // 5. hsn(b2b) (Empty template)
+  const hsnB2bSheet = XLSX.utils.aoa_to_sheet([
+    ["Summary For HSN(12)",null,null,null,null,null,null,null,null,null,"HELP"],
+    ["No. of HSN",null,null,null,"Total Value",null,"Total Taxable Value","Total Integrated Tax","Total Central Tax","Total State/UT Tax","Total Cess"]
+  ]);
+  XLSX.utils.book_append_sheet(outWb, hsnB2bSheet, "hsn(b2b)");
+
+  // 6. hsn(b2c) (Populated)
+  const totalHsnTxval = hsn_b2c.reduce((acc, row) => acc + row.txval, 0);
+  const totalHsnIamt = hsn_b2c.reduce((acc, row) => acc + row.iamt, 0);
+  const totalHsnCamt = hsn_b2c.reduce((acc, row) => acc + row.camt, 0);
+  const totalHsnSamt = hsn_b2c.reduce((acc, row) => acc + row.samt, 0);
+  // Total Value is typically Txval + all taxes
+  const totalHsnValue = totalHsnTxval + totalHsnIamt + totalHsnCamt + totalHsnSamt;
+
+  const hsnB2cAoA: any[][] = [
+    ["Summary For HSN(12)",null,null,null,null,null,null,null,null,null,"HELP"],
+    ["No. of HSN",null,null,null,"Total Value",null,"Total Taxable Value","Total Integrated Tax","Total Central Tax","Total State/UT Tax","Total Cess"],
+    [hsn_b2c.length, null, null, null, totalHsnValue, null, totalHsnTxval, totalHsnIamt, totalHsnCamt, totalHsnSamt, 0],
+    ["HSN","Description","UQC","Total Quantity","Total Value","Rate","Taxable Value","Integrated Tax Amount","Central Tax Amount","State/UT Tax Amount","Cess Amount"]
+  ];
+  hsn_b2c.forEach(row => {
+    const rowTotal = row.txval + row.iamt + row.camt + row.samt;
+    hsnB2cAoA.push([
+      parseInt(row.hsn_sc),
+      null, // Description
+      "PCS-PIECES",
+      row.qty,
+      rowTotal,
+      row.rt,
+      row.txval,
+      row.iamt,
+      row.camt,
+      row.samt,
+      row.csamt
+    ]);
+  });
+  const hsnB2cSheet = XLSX.utils.aoa_to_sheet(hsnB2cAoA);
+  XLSX.utils.book_append_sheet(outWb, hsnB2cSheet, "hsn(b2c)");
+
+  // 7. exemp (Empty template)
+  const exempSheet = XLSX.utils.aoa_to_sheet([
+    ["Summary For Nil rated, exempted and non GST outward supplies (8)",null,null,"HELP"],
+    [null,"Total Nil Rated Supplies","Total Exempted Supplies","Total Non-GST Supplies"]
+  ]);
+  XLSX.utils.book_append_sheet(outWb, exempSheet, "exemp");
+
+  // 8. eco (Populated placeholder)
+  // Hardcoded for Meesho based on typical B2C logic, can be refined based on actual supeco array.
+  const ecoAoA = [
+    ["Summary For Supplies through ECO-14",null,null,null,null,null,null,"HELP"],
+    [null,"No. of E-Commerce Operator",null,"Total Net Value of Supplies","Total Integrated Tax","Total Central Tax ","Total State/UT Tax ","Total Cess"],
+    [null, 1, null, totalB2csTaxable, 0, 0, 0, 0],
+    ["Nature of Supply","GSTIN of E-Commerce Operator","E-Commerce Operator Name","Net value of supplies","Integrated tax","Central tax","State/UT tax","Cess"],
+    ["Liable to collect tax u/s 52(TCS)", "09AARCM9332R1CM", "meesho", totalB2csTaxable, 0, 0, 0, 0]
+  ];
+  const ecoSheet = XLSX.utils.aoa_to_sheet(ecoAoA);
+  XLSX.utils.book_append_sheet(outWb, ecoSheet, "eco");
+
+  // 9. docs (Populated placeholder)
+  const docsAoA = [
+    ["Summary of documents issued during the tax period (13)",null,null,null,"HELP"],
+    [null,null,null,"Total Number","Total Cancelled"],
+    [null,null,null, invoicesData.length, 0],
+    ["Nature of Document","Sr. No. From","Sr. No. To","Total Number","Cancelled"],
+    ["Invoices for outward supply", invoicesData[0]?.['Invoice No.'] || "", invoicesData[invoicesData.length - 1]?.['Invoice No.'] || "", invoicesData.length, 0]
+  ];
+  const docsSheet = XLSX.utils.aoa_to_sheet(docsAoA);
+  XLSX.utils.book_append_sheet(outWb, docsSheet, "docs");
   
   const excelBuffer = XLSX.write(outWb, { type: 'buffer', bookType: 'xlsx' });
 

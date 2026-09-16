@@ -1,20 +1,20 @@
 const XLSX = require('xlsx');
 
-const files = [
-  '/home/codex/projects/ai_work/sample/tcs_sales.xlsx',
-  '/home/codex/projects/ai_work/sample/tcs_sales_return.xlsx',
-  '/home/codex/projects/ai_work/sample/Tax_invoice_details.xlsx'
-];
+const file = '/home/codex/projects/ai_work/sample/GSTR1_09BUZPR2385D1ZV_monthly_082026.xlsx';
 
-files.forEach(file => {
-  try {
-    const workbook = XLSX.readFile(file);
-    const sheetName = workbook.SheetNames[0];
+try {
+  const workbook = XLSX.readFile(file);
+  const targetSheets = ['b2cs', 'hsn(b2c)', 'eco', 'docs'];
+  
+  targetSheets.forEach(sheetName => {
     const sheet = workbook.Sheets[sheetName];
-    const data = XLSX.utils.sheet_to_json(sheet);
-    console.log(`\n--- First Row for ${file.split('/').pop()} ---`);
-    console.log(JSON.stringify(data[0], null, 2));
-  } catch (err) {
-    console.error(`Error reading ${file}:`, err.message);
-  }
-});
+    if (!sheet) return;
+    const data = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+    console.log(`\n--- Sheet: ${sheetName} ---`);
+    if (data.length > 2) console.log('Row 3 (Headers?):', JSON.stringify(data[2]));
+    if (data.length > 3) console.log('Row 4 (Data):', JSON.stringify(data[3]));
+    if (data.length > 4) console.log('Row 5 (Data):', JSON.stringify(data[4]));
+  });
+} catch (err) {
+  console.error(`Error reading ${file}:`, err.message);
+}
