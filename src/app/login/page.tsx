@@ -28,7 +28,7 @@ export default function LoginPage() {
       setAuthError(result.error);
       setIsLoading(false);
     } else {
-      router.push('/dashboard');
+      router.push('/');
     }
   };
 
